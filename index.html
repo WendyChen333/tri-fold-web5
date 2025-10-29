@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>互動三折頁｜按鈕翻頁＋摺線陰影</title>
+  <style>
+    :root{ --ink:#e5e7eb; --bg:#0b0c10; --panel:#0f172a; }
+    *{box-sizing:border-box}
+    body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#111827,#0b0c10);font-family:ui-sans-serif,system-ui,"Noto Sans TC",-apple-system,"Segoe UI",Roboto,Helvetica,Arial;color:var(--ink);display:flex;flex-direction:column;align-items:center;gap:14px;padding:18px}
+    .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);padding:8px 10px;border-radius:12px;backdrop-filter:blur(8px)}
+    .toolbar button{cursor:pointer;border:none;padding:10px 14px;border-radius:10px;font-weight:700;color:#0b1220;background:#f9fafb}
+    .toolbar button.secondary{background:#1f2937;color:#e5e7eb;border:1px solid #374151}
+    .stage{width:min(1100px,95vw);aspect-ratio:3/2;position:relative;border-radius:16px;overflow:hidden;background:#0f172a;box-shadow:0 30px 80px rgba(0,0,0,.45),inset 0 0 0 1px rgba(255,255,255,.06);perspective:1600px}
+    .brochure{position:absolute;inset:0;display:flex;transform-style:preserve-3d}
+    .panel{flex:1 1 33.333%;position:relative;transform-style:preserve-3d;transition:transform 700ms ease}
+    .panel.left{transform-origin:left center}
+    .panel.center{transform-origin:center center}
+    .panel.right{transform-origin:right center}
+    .face{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--panel);backface-visibility:hidden;overflow:hidden}
+    .face img{width:100%;height:100%;object-fit:contain;display:block}
+    .back{transform:rotateY(180deg)}
+    /* 強烈摺線陰影 */
+    .crease{position:absolute;top:0;bottom:0;width:14px;pointer-events:none}
+    .crease.left{left:33.333%}
+    .crease.right{left:66.666%}
+    .crease:before,.crease:after{content:"";position:absolute;inset:0;background:linear-gradient(to right,rgba(0,0,0,.55),rgba(0,0,0,0) 50%),linear-gradient(to left,rgba(0,0,0,.55),rgba(0,0,0,0) 50%);mix-blend-mode:multiply;opacity:.85;filter:blur(0.4px)}
+    .hint{font-size:12px;opacity:.75}
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <button id="prevBtn" class="secondary">上一頁</button>
+    <button id="nextBtn">下一頁</button>
+    <button id="zoomIn">放大</button>
+    <button id="zoomOut" class="secondary">縮小</button>
+  </div>
+  <div class="hint">順序：1 封面 outer-right → 2 初開（左：inner-left｜右：outer-left）→ 3 全開（inner-left / inner-center / inner-right）→ 4 回初開 → 5 回封面 → 6 翻面（outer-center）。</div>
+
+  <div class="stage">
+    <div class="brochure" id="brochure">
+      <!-- 左頁 -->
+      <div class="panel left" id="pLeft">
+        <div class="face front"><img src="inner-left.jpg" alt="inner-left"></div>
+        <div class="face back"><img src="inner-left.jpg" alt="inner-left(back)"></div>
+      </div>
+      <!-- 中頁 -->
+      <div class="panel center" id="pCenter">
+        <div class="face front"><img src="inner-center.jpg" alt="inner-center"></div>
+        <div class="face back"><img src="inner-center.jpg" alt="inner-center(back)"></div>
+      </div>
+      <!-- 右頁（會動態顯示不同圖） -->
+      <div class="panel right" id="pRight">
+        <div class="face front" id="rightFront"><img id="rightFrontImg" src="outer-right.jpg" alt="outer-right"></div>
+        <!-- 右頁背面：我們會在不同階段切換要顯示的圖（outer-left / inner-right） -->
+        <div class="face back" id="rightBack">
+          <img id="rightBackImg" src="outer-left.jpg" alt="right-back">
+        </div>
+      </div>
+      <!-- 顯眼摺線陰影 -->
+      <div class="crease left"></div>
+      <div class="crease right"></div>
+    </div>
+  </div>
+
+  <script>
+    // 階段定義：
+    // 1=封面 outer-right
+    // 2=初開（左 inner-left + 右 outer-left）
+    // 3=全開（inner-left + inner-center + inner-right）
+    // 4=回初開（同 2）
+    // 5=回封面（同 1）
+    // 6=翻面 outer-center
+    let stage = 1;
+
+    const pLeft = document.getElementById('pLeft');
+    const pCenter = document.getElementById('pCenter');
+    const pRight = document.getElementById('pRight');
+    const rightFrontImg = document.getElementById('rightFrontImg');
+    const rightBackImg = document.getElementById('rightBackImg');
+    const brochure = document.getElementById('brochure');
+
+    function setTransforms(l, c, r){
+      pLeft.style.transform = `rotateY(${l}deg)`;
+      pCenter.style.transform = `rotateY(${c}deg)`;
+      pRight.style.transform = `rotateY(${r}deg)`;
+    }
+
+    function applyStage(){
+      switch(stage){
+        case 1: // 封面
+          rightFrontImg.src = 'outer-right.jpg';
+          rightBackImg.src  = 'outer-left.jpg'; // 預載
+          setTransforms(180, 180, 0);
+          break;
+        case 2: // 初開：左 inner-left、右 outer-left
+          rightBackImg.src  = 'outer-left.jpg';
+          setTransforms(0, 180, 180);
+          break;
+        case 3: // 全開：顯示 inner-right
+          rightBackImg.src  = 'inner-right.jpg';
+          setTransforms(0, 0, 180);
+          break;
+        case 4: // 回初開
+          rightBackImg.src  = 'outer-left.jpg';
+          setTransforms(0, 180, 180);
+          break;
+        case 5: // 回封面
+          rightFrontImg.src = 'outer-right.jpg';
+          rightBackImg.src  = 'outer-left.jpg';
+          setTransforms(180, 180, 0);
+          break;
+        case 6: // 翻面：只看 outer-center
+          rightFrontImg.src = 'outer-center.jpg';
+          setTransforms(180, 180, 0);
+          break;
+      }
+    }
+
+    // 控制按鈕
+    document.getElementById('nextBtn').addEventListener('click', ()=>{
+      stage = (stage === 6) ? 1 : stage + 1; // 循環
+      applyStage();
+    });
+    document.getElementById('prevBtn').addEventListener('click', ()=>{
+      stage = (stage === 1) ? 6 : stage - 1;
+      applyStage();
+    });
+
+    // 縮放
+    let scale = 1;
+    function setScale(){ brochure.style.transform = `scale(${scale})`; }
+    document.getElementById('zoomIn').addEventListener('click', ()=>{ scale = Math.min(2, scale+0.1); setScale(); });
+    document.getElementById('zoomOut').addEventListener('click', ()=>{ scale = Math.max(0.8, scale-0.1); setScale(); });
+
+    applyStage();
+  </script>
+</body>
+</html>
